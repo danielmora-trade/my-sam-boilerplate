@@ -1,5 +1,4 @@
-import { AuroraDataService } from 'shared/services/aurora-data.service';
-import { UuidGeneratorService } from 'shared/services/uuid-generator.service';
+import { AuroraDataService, UuidGeneratorService } from 'shared';
 import { Product } from '../domain/product.entity';
 import { IProductRepository } from '../domain/product.repository';
 

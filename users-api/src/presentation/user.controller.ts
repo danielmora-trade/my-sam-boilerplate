@@ -1,7 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { ApiResponseService } from 'shared/services/api-response.service';
-import { AuroraDataService } from 'shared/services/aurora-data.service';
-import { UuidGeneratorService } from 'shared/services/uuid-generator.service';
+import { ApiResponseService, AuroraDataService, UuidGeneratorService } from 'shared';
 import { UserRepository } from '../infrastructure/user.repository';
 import { UserService } from '../application/user.service';
 import { CreateUserRequest } from '../domain/user.entity';
