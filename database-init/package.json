@@ -1,0 +1,20 @@
+{
+  "name": "database-init",
+  "version": "1.0.0",
+  "description": "Database initialization Lambda",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/aws-lambda": "^8.10.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.19.0"
+  }
+}
