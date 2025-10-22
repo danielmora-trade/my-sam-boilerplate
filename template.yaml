@@ -235,7 +235,7 @@ Resources:
       Type: AWS::Serverless::LayerVersion
       Properties:
         LayerName: my-shared-dependencies
-        ContentUri: layers/node-utils/
+        ContentUri: layers/shared/
         CompatibleRuntimes:
           - nodejs22.x
       Metadata:
@@ -288,7 +288,7 @@ Resources:
         Sourcemap: true
         External:
           - "@aws-sdk/*"
-          - "shared-utils"
+          - "shared"
         EntryPoints: 
         - app.ts
   
@@ -335,53 +335,7 @@ Resources:
         Sourcemap: true
         External:
           - "@aws-sdk/*"
-          - "shared-utils"
-        EntryPoints: 
-        - app.ts
-
-  GetUserByIdFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Layers: 
-        - !Ref SharedDependenciesLayer
-      CodeUri: users-api/
-      Handler: app.getUserById
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      Environment:
-        Variables:
-          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
-          DB_SECRET_ARN: !Ref AuroraDBSecret
-          DB_NAME: !Ref DBName
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action:
-                - secretsmanager:GetSecretValue
-                - secretsmanager:DescribeSecret
-              Resource: !Ref AuroraDBSecret
-        - Statement:
-            - Effect: Allow
-              Action:
-                - rds-data:ExecuteStatement
-                - rds-data:BatchExecuteStatement
-              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
-      Events:
-        GetUserById:
-          Type: Api
-          Properties:
-            Path: /users/{id}
-            Method: get
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: "es2020"
-        Sourcemap: true
-        External:
-          - "@aws-sdk/*"
-          - "shared-utils"
+          - "shared"
         EntryPoints: 
         - app.ts
 
@@ -427,53 +381,7 @@ Resources:
         Sourcemap: true
         External:
           - "@aws-sdk/*"
-          - "shared-utils"
-        EntryPoints: 
-        - app.ts
-
-  UpdateUserFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Layers: 
-        - !Ref SharedDependenciesLayer
-      CodeUri: users-api/
-      Handler: app.updateUser
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      Environment:
-        Variables:
-          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
-          DB_SECRET_ARN: !Ref AuroraDBSecret
-          DB_NAME: !Ref DBName
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action:
-                - secretsmanager:GetSecretValue
-                - secretsmanager:DescribeSecret
-              Resource: !Ref AuroraDBSecret
-        - Statement:
-            - Effect: Allow
-              Action:
-                - rds-data:ExecuteStatement
-                - rds-data:BatchExecuteStatement
-              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
-      Events:
-        UpdateUser:
-          Type: Api
-          Properties:
-            Path: /users/{id}
-            Method: put
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: "es2020"
-        Sourcemap: true
-        External:
-          - "@aws-sdk/*"
-          - "shared-utils"
+          - "shared"
         EntryPoints: 
         - app.ts
 
@@ -519,7 +427,7 @@ Resources:
         Sourcemap: true
         External:
           - "@aws-sdk/*"
-          - "shared-utils"
+          - "shared"
         EntryPoints: 
         - app.ts
 
@@ -566,53 +474,7 @@ Resources:
         Sourcemap: true
         External:
           - "@aws-sdk/*"
-          - "shared-utils"
-        EntryPoints: 
-        - app.ts
-
-  GetProductByIdFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Layers: 
-        - !Ref SharedDependenciesLayer
-      CodeUri: products-api/
-      Handler: app.getProductById
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      Environment:
-        Variables:
-          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
-          DB_SECRET_ARN: !Ref AuroraDBSecret
-          DB_NAME: !Ref DBName
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action:
-                - secretsmanager:GetSecretValue
-                - secretsmanager:DescribeSecret
-              Resource: !Ref AuroraDBSecret
-        - Statement:
-            - Effect: Allow
-              Action:
-                - rds-data:ExecuteStatement
-                - rds-data:BatchExecuteStatement
-              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
-      Events:
-        GetProductById:
-          Type: Api
-          Properties:
-            Path: /products/{id}
-            Method: get
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: "es2020"
-        Sourcemap: true
-        External:
-          - "@aws-sdk/*"
-          - "shared-utils"
+          - "shared"
         EntryPoints: 
         - app.ts
 
@@ -658,99 +520,7 @@ Resources:
         Sourcemap: true
         External:
           - "@aws-sdk/*"
-          - "shared-utils"
-        EntryPoints: 
-        - app.ts
-
-  GetProductsByCategoryFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Layers: 
-        - !Ref SharedDependenciesLayer
-      CodeUri: products-api/
-      Handler: app.getProductsByCategory
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      Environment:
-        Variables:
-          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
-          DB_SECRET_ARN: !Ref AuroraDBSecret
-          DB_NAME: !Ref DBName
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action:
-                - secretsmanager:GetSecretValue
-                - secretsmanager:DescribeSecret
-              Resource: !Ref AuroraDBSecret
-        - Statement:
-            - Effect: Allow
-              Action:
-                - rds-data:ExecuteStatement
-                - rds-data:BatchExecuteStatement
-              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
-      Events:
-        GetProductsByCategory:
-          Type: Api
-          Properties:
-            Path: /products/category/{category}
-            Method: get
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: "es2020"
-        Sourcemap: true
-        External:
-          - "@aws-sdk/*"
-          - "shared-utils"
-        EntryPoints: 
-        - app.ts
-
-  UpdateProductFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Layers: 
-        - !Ref SharedDependenciesLayer
-      CodeUri: products-api/
-      Handler: app.updateProduct
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      Environment:
-        Variables:
-          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
-          DB_SECRET_ARN: !Ref AuroraDBSecret
-          DB_NAME: !Ref DBName
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action:
-                - secretsmanager:GetSecretValue
-                - secretsmanager:DescribeSecret
-              Resource: !Ref AuroraDBSecret
-        - Statement:
-            - Effect: Allow
-              Action:
-                - rds-data:ExecuteStatement
-                - rds-data:BatchExecuteStatement
-              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
-      Events:
-        UpdateProduct:
-          Type: Api
-          Properties:
-            Path: /products/{id}
-            Method: put
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: "es2020"
-        Sourcemap: true
-        External:
-          - "@aws-sdk/*"
-          - "shared-utils"
+          - "shared"
         EntryPoints: 
         - app.ts
 
@@ -796,53 +566,7 @@ Resources:
         Sourcemap: true
         External:
           - "@aws-sdk/*"
-          - "shared-utils"
-        EntryPoints: 
-        - app.ts
-
-  UpdateStockFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Layers: 
-        - !Ref SharedDependenciesLayer
-      CodeUri: products-api/
-      Handler: app.updateStock
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      Environment:
-        Variables:
-          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
-          DB_SECRET_ARN: !Ref AuroraDBSecret
-          DB_NAME: !Ref DBName
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action:
-                - secretsmanager:GetSecretValue
-                - secretsmanager:DescribeSecret
-              Resource: !Ref AuroraDBSecret
-        - Statement:
-            - Effect: Allow
-              Action:
-                - rds-data:ExecuteStatement
-                - rds-data:BatchExecuteStatement
-              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
-      Events:
-        UpdateStock:
-          Type: Api
-          Properties:
-            Path: /products/{id}/stock
-            Method: patch
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: "es2020"
-        Sourcemap: true
-        External:
-          - "@aws-sdk/*"
-          - "shared-utils"
+          - "shared"
         EntryPoints: 
         - app.ts
 
