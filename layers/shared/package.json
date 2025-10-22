@@ -7,15 +7,13 @@
   "dependencies": {
     "uuid": "^9.0.0",
     "@aws-sdk/client-rds-data": "^3.914.0",
-    "@aws-sdk/client-secrets-manager": "^3.914.0"
-  },
-  "devDependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.914.0",
     "typescript": "^5.0.0",
     "@types/node": "^20.0.0",
     "@types/uuid": "^9.0.0"
   },
   "scripts": {
     "build": "tsc --build",
-    "prepack": "node ./scripts/prepare-output.js || true"
+    "postinstall": "npm run build"
   }
 }
