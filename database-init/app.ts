@@ -1,5 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DatabaseInitializer, ApiResponseService } from 'shared-utils';
+import { DatabaseInitializer, ApiResponseService } from 'shared';
 
 const responseService = new ApiResponseService();
 

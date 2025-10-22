@@ -7,16 +7,8 @@ export const createUser = async (event: APIGatewayProxyEvent): Promise<APIGatewa
   return await userController.createUser(event);
 };
 
-export const getUserById = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  return await userController.getUserById(event);
-};
-
 export const getAllUsers = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   return await userController.getAllUsers(event);
-};
-
-export const updateUser = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  return await userController.updateUser(event);
 };
 
 export const deleteUser = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
