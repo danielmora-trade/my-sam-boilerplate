@@ -3,47 +3,917 @@ Transform: AWS::Serverless-2016-10-31
 Description: >
   my-sam-boilerplate
 
-  Sample SAM Template for my-sam-boilerplate
+  Sample SAM Template for my-sam-boilerplate with Aurora Serverless v2
+  Optimized for cost: Lambda outside VPC, Aurora accessed via RDS Data API
   
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 3
+    Timeout: 30
+    MemorySize: 512
+
+Parameters:
+  DBName:
+    Type: String
+    Default: mydatabase
+    Description: Database name for Aurora
+  DBMasterUsername:
+    Type: String
+    Default: dbadmin
+    Description: Master username for Aurora (cannot use 'admin' as it's reserved)
+    NoEcho: true
+  VpcCIDR:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block for VPC
+  PublicSubnet1CIDR:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: CIDR block for public subnet 1
+  PublicSubnet2CIDR:
+    Type: String
+    Default: 10.0.2.0/24
+    Description: CIDR block for public subnet 2
+  PrivateSubnet1CIDR:
+    Type: String
+    Default: 10.0.10.0/24
+    Description: CIDR block for private subnet 1
+  PrivateSubnet2CIDR:
+    Type: String
+    Default: 10.0.11.0/24
+    Description: CIDR block for private subnet 2
 
 Resources:
-  HelloWorldFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+  # ========================================
+  # VPC CONFIGURATION
+  # ========================================
+  VPC:
+    Type: AWS::EC2::VPC
     Properties:
-      CodeUri: hello-world/
-      Handler: app.lambdaHandler
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-IGW
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-Subnet-1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Ref PublicSubnet2CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-Subnet-2
+
+  # Private Subnets (for Lambda and Aurora)
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Private-Subnet-1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Private-Subnet-2
+
+  # NAT Gateway removed for cost optimization
+  # Aurora will be accessed via RDS Data API from Lambda outside VPC
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-Routes
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  # Private Route Table removed - Aurora doesn't need internet access
+  # Aurora will be accessed via RDS Data API from Lambda outside VPC
+
+  # ========================================
+  # SECURITY GROUPS
+  # ========================================
+  # Lambda Security Group removed - Lambda runs outside VPC
+  
+  AuroraSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Aurora Serverless
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Aurora-SG
+
+  # ========================================
+  # SECRETS MANAGER
+  # ========================================
+  AuroraDBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${AWS::StackName}-aurora-secret
+      Description: Aurora PostgreSQL database credentials
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+        RequireEachIncludedType: true
+
+  # ========================================
+  # AURORA SERVERLESS V2
+  # ========================================
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for Aurora Serverless
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-DB-SubnetGroup
+
+  AuroraDBCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora-postgresql
+      EngineMode: provisioned
+      EngineVersion: '15.5'
+      DatabaseName: !Ref DBName
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${AuroraDBSecret}:SecretString:password}}'
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref AuroraSecurityGroup
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: 0.5
+        MaxCapacity: 1
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'mon:04:00-mon:05:00'
+      EnableHttpEndpoint: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Aurora-Cluster
+
+  AuroraDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: aurora-postgresql
+      DBInstanceClass: db.serverless
+      DBClusterIdentifier: !Ref AuroraDBCluster
+      PubliclyAccessible: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Aurora-Instance
+
+  # ========================================
+  # LAMBDA LAYER
+  # ========================================
+  SharedDependenciesLayer:
+      Type: AWS::Serverless::LayerVersion
+      Properties:
+        LayerName: my-shared-dependencies
+        ContentUri: layers/node-utils/
+        CompatibleRuntimes:
+          - nodejs22.x
+      Metadata:
+        BuildMethod: nodejs22.x
+
+  # ========================================
+  # LAMBDA FUNCTIONS
+  # ========================================
+  
+  # Database Initialization Function
+  DatabaseInitFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Layers: 
+        - !Ref SharedDependenciesLayer
+      CodeUri: database-init/
+      Handler: app.initializeDatabase
       Runtime: nodejs22.x
       Architectures:
         - x86_64
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+          DB_SECRET_ARN: !Ref AuroraDBSecret
+          DB_NAME: !Ref DBName
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: !Ref AuroraDBSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
       Events:
-        HelloWorld:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+        DatabaseInit:
+          Type: Api
           Properties:
-            Path: /hello
-            Method: get
-    Metadata: # Manage esbuild properties
+            Path: /init-db
+            Method: post
+    Metadata:
       BuildMethod: esbuild
       BuildProperties:
         Minify: true
         Target: "es2020"
         Sourcemap: true
+        External:
+          - "@aws-sdk/*"
+          - "shared-utils"
+        EntryPoints: 
+        - app.ts
+  
+  # Users API Lambda Functions
+  CreateUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Layers: 
+        - !Ref SharedDependenciesLayer
+      CodeUri: users-api/
+      Handler: app.createUser
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+          DB_SECRET_ARN: !Ref AuroraDBSecret
+          DB_NAME: !Ref DBName
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: !Ref AuroraDBSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+      Events:
+        CreateUser:
+          Type: Api
+          Properties:
+            Path: /users
+            Method: post
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        External:
+          - "@aws-sdk/*"
+          - "shared-utils"
+        EntryPoints: 
+        - app.ts
+
+  GetUserByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Layers: 
+        - !Ref SharedDependenciesLayer
+      CodeUri: users-api/
+      Handler: app.getUserById
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+          DB_SECRET_ARN: !Ref AuroraDBSecret
+          DB_NAME: !Ref DBName
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: !Ref AuroraDBSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+      Events:
+        GetUserById:
+          Type: Api
+          Properties:
+            Path: /users/{id}
+            Method: get
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        External:
+          - "@aws-sdk/*"
+          - "shared-utils"
+        EntryPoints: 
+        - app.ts
+
+  GetAllUsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Layers: 
+        - !Ref SharedDependenciesLayer
+      CodeUri: users-api/
+      Handler: app.getAllUsers
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+          DB_SECRET_ARN: !Ref AuroraDBSecret
+          DB_NAME: !Ref DBName
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: !Ref AuroraDBSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+      Events:
+        GetAllUsers:
+          Type: Api
+          Properties:
+            Path: /users
+            Method: get
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        External:
+          - "@aws-sdk/*"
+          - "shared-utils"
+        EntryPoints: 
+        - app.ts
+
+  UpdateUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Layers: 
+        - !Ref SharedDependenciesLayer
+      CodeUri: users-api/
+      Handler: app.updateUser
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+          DB_SECRET_ARN: !Ref AuroraDBSecret
+          DB_NAME: !Ref DBName
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: !Ref AuroraDBSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+      Events:
+        UpdateUser:
+          Type: Api
+          Properties:
+            Path: /users/{id}
+            Method: put
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        External:
+          - "@aws-sdk/*"
+          - "shared-utils"
+        EntryPoints: 
+        - app.ts
+
+  DeleteUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Layers: 
+        - !Ref SharedDependenciesLayer
+      CodeUri: users-api/
+      Handler: app.deleteUser
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+          DB_SECRET_ARN: !Ref AuroraDBSecret
+          DB_NAME: !Ref DBName
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: !Ref AuroraDBSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+      Events:
+        DeleteUser:
+          Type: Api
+          Properties:
+            Path: /users/{id}
+            Method: delete
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        External:
+          - "@aws-sdk/*"
+          - "shared-utils"
+        EntryPoints: 
+        - app.ts
+
+  # Products API Lambda Functions
+  CreateProductFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Layers: 
+        - !Ref SharedDependenciesLayer
+      CodeUri: products-api/
+      Handler: app.createProduct
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+          DB_SECRET_ARN: !Ref AuroraDBSecret
+          DB_NAME: !Ref DBName
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: !Ref AuroraDBSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+      Events:
+        CreateProduct:
+          Type: Api
+          Properties:
+            Path: /products
+            Method: post
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        External:
+          - "@aws-sdk/*"
+          - "shared-utils"
+        EntryPoints: 
+        - app.ts
+
+  GetProductByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Layers: 
+        - !Ref SharedDependenciesLayer
+      CodeUri: products-api/
+      Handler: app.getProductById
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+          DB_SECRET_ARN: !Ref AuroraDBSecret
+          DB_NAME: !Ref DBName
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: !Ref AuroraDBSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+      Events:
+        GetProductById:
+          Type: Api
+          Properties:
+            Path: /products/{id}
+            Method: get
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        External:
+          - "@aws-sdk/*"
+          - "shared-utils"
+        EntryPoints: 
+        - app.ts
+
+  GetAllProductsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Layers: 
+        - !Ref SharedDependenciesLayer
+      CodeUri: products-api/
+      Handler: app.getAllProducts
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+          DB_SECRET_ARN: !Ref AuroraDBSecret
+          DB_NAME: !Ref DBName
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: !Ref AuroraDBSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+      Events:
+        GetAllProducts:
+          Type: Api
+          Properties:
+            Path: /products
+            Method: get
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        External:
+          - "@aws-sdk/*"
+          - "shared-utils"
+        EntryPoints: 
+        - app.ts
+
+  GetProductsByCategoryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Layers: 
+        - !Ref SharedDependenciesLayer
+      CodeUri: products-api/
+      Handler: app.getProductsByCategory
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+          DB_SECRET_ARN: !Ref AuroraDBSecret
+          DB_NAME: !Ref DBName
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: !Ref AuroraDBSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+      Events:
+        GetProductsByCategory:
+          Type: Api
+          Properties:
+            Path: /products/category/{category}
+            Method: get
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        External:
+          - "@aws-sdk/*"
+          - "shared-utils"
+        EntryPoints: 
+        - app.ts
+
+  UpdateProductFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Layers: 
+        - !Ref SharedDependenciesLayer
+      CodeUri: products-api/
+      Handler: app.updateProduct
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+          DB_SECRET_ARN: !Ref AuroraDBSecret
+          DB_NAME: !Ref DBName
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: !Ref AuroraDBSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+      Events:
+        UpdateProduct:
+          Type: Api
+          Properties:
+            Path: /products/{id}
+            Method: put
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        External:
+          - "@aws-sdk/*"
+          - "shared-utils"
+        EntryPoints: 
+        - app.ts
+
+  DeleteProductFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Layers: 
+        - !Ref SharedDependenciesLayer
+      CodeUri: products-api/
+      Handler: app.deleteProduct
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+          DB_SECRET_ARN: !Ref AuroraDBSecret
+          DB_NAME: !Ref DBName
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: !Ref AuroraDBSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+      Events:
+        DeleteProduct:
+          Type: Api
+          Properties:
+            Path: /products/{id}
+            Method: delete
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        External:
+          - "@aws-sdk/*"
+          - "shared-utils"
+        EntryPoints: 
+        - app.ts
+
+  UpdateStockFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Layers: 
+        - !Ref SharedDependenciesLayer
+      CodeUri: products-api/
+      Handler: app.updateStock
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+          DB_SECRET_ARN: !Ref AuroraDBSecret
+          DB_NAME: !Ref DBName
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: !Ref AuroraDBSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+              Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+      Events:
+        UpdateStock:
+          Type: Api
+          Properties:
+            Path: /products/{id}/stock
+            Method: patch
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        External:
+          - "@aws-sdk/*"
+          - "shared-utils"
         EntryPoints: 
         - app.ts
 
 Outputs:
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  HelloWorldApi:
-    Description: "API Gateway endpoint URL for Prod stage for Hello World function"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/hello/"
-  HelloWorldFunction:
-    Description: "Hello World Lambda Function ARN"
-    Value: !GetAtt HelloWorldFunction.Arn
-  HelloWorldFunctionIamRole:
-    Description: "Implicit IAM Role created for Hello World function"
-    Value: !GetAtt HelloWorldFunctionRole.Arn
+  # API Outputs
+  ApiGatewayUrl:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/"
+  
+  # Users API Endpoints
+  UsersApiEndpoints:
+    Description: "Users API Endpoints"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/users"
+  
+  # Products API Endpoints  
+  ProductsApiEndpoints:
+    Description: "Products API Endpoints"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/products"
+  
+  # VPC Outputs
+  VPCId:
+    Description: "VPC ID"
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${AWS::StackName}-VPC-ID
+  
+  PrivateSubnet1Id:
+    Description: "Private Subnet 1 ID"
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnet1-ID
+  
+  PrivateSubnet2Id:
+    Description: "Private Subnet 2 ID"
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnet2-ID
+  
+  # Security Group Outputs
+  AuroraSecurityGroupId:
+    Description: "Aurora Security Group ID"
+    Value: !Ref AuroraSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-Aurora-SG-ID
+  
+  # Database Outputs
+  AuroraClusterEndpoint:
+    Description: "Aurora Cluster Endpoint"
+    Value: !GetAtt AuroraDBCluster.Endpoint.Address
+    Export:
+      Name: !Sub ${AWS::StackName}-Aurora-Endpoint
+  
+  AuroraClusterReadEndpoint:
+    Description: "Aurora Cluster Read Endpoint"
+    Value: !GetAtt AuroraDBCluster.ReadEndpoint.Address
+    Export:
+      Name: !Sub ${AWS::StackName}-Aurora-ReadEndpoint
+  
+  AuroraClusterPort:
+    Description: "Aurora Cluster Port"
+    Value: !GetAtt AuroraDBCluster.Endpoint.Port
+    Export:
+      Name: !Sub ${AWS::StackName}-Aurora-Port
+  
+  DatabaseName:
+    Description: "Database Name"
+    Value: !Ref DBName
+  
+  # Secrets Manager Output
+  DBSecretArn:
+    Description: "ARN of the Secrets Manager secret containing DB credentials"
+    Value: !Ref AuroraDBSecret
+    Export:
+      Name: !Sub ${AWS::StackName}-DB-Secret-ARN

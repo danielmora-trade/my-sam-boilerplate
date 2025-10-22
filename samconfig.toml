@@ -37,6 +37,26 @@ region = "us-east-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 image_repositories = []
+parameter_overrides = "Environment=Development"
+
+[prod.deploy.parameters]
+stack_name = "my-api-prod"
+resolve_s3 = true
+s3_prefix = "my-api-prod"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+image_repositories = []
+parameter_overrides = "Environment=Production"
 
 [dev.global.parameters]
 region = "us-east-1"
+
+[prod.global.parameters]
+region = "us-east-1"
+
+[dev.sync.parameters]
+watch = true
+
+[prod.sync.parameters]
+watch = false
