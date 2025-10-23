@@ -1,127 +1,283 @@
+# SAM Boilerplate - AWS Serverless API with Aurora Serverless v2
+
+Este es un boilerplate profesional para crear APIs serverless en AWS usando **SAM (Serverless Application Model)**, **Aurora Serverless v2**, **Clean Architecture** y **Lambda Layers** para compartir código entre funciones.
+
+## 🎯 Características Principales
+
+- ✅ **2 APIs completas (CRUD)**: Users y Products
+- ✅ **Clean Architecture + SOLID**: Separación clara de responsabilidades
+- ✅ **Lambda Layers**: Código compartido centralizado (no duplicado)
+- ✅ **Aurora Serverless v2**: Base de datos PostgreSQL serverless
+- ✅ **RDS Data API**: Acceso a base de datos sin gestionar conexiones
+- ✅ **Secrets Manager**: Credenciales seguras
+- ✅ **API Gateway**: 7 endpoints REST configurados
+- ✅ **TypeScript**: Tipado fuerte en todo el proyecto
+- ✅ **esbuild**: Build optimizado y rápido
+- ✅ **Optimizado para costos**: Lambda fuera de VPC
+
+## 🏗️ Arquitectura
+
+### Shared Layer (`/opt/nodejs`)
+El layer compartido contiene servicios reutilizables compilados a JavaScript:
+- **UuidGeneratorService**: Generación de IDs únicos
+- **ApiResponseService**: Respuestas HTTP estandarizadas
+- **AuroraDataService**: Clase que implementa un servicio de base de datos para ejecutar consultas y sentencias SQL en Amazon Aurora usando el cliente RDS Data API de AWS.
 # my-sam-boilerplate
 
-This project contains source code and supporting files for a serverless application that you can deploy with the SAM CLI. It includes the following files and folders.
+Boilerplate para proyectos serverless con AWS SAM (Serverless Application Model). Proporciona una plantilla y configuración inicial para desplegar Lambdas en TypeScript, usar Lambda Layers compartidos, y conectar con Aurora Serverless v2 mediante la RDS Data API.
 
-- hello-world - Code for the application's Lambda function written in TypeScript.
-- events - Invocation events that you can use to invoke the function.
-- hello-world/tests - Unit tests for the application code. 
-- template.yaml - A template that defines the application's AWS resources.
+Este README explica cómo usar el proyecto en Windows, macOS o Linux, cómo crear nuevas Lambdas y Layers en TypeScript, los comandos esenciales, y qué ya está preconfigurado en `template.yaml` y `samconfig.toml`.
 
-The application uses several AWS resources, including Lambda functions and an API Gateway API. These resources are defined in the `template.yaml` file in this project. You can update the template to add AWS resources through the same deployment process that updates your application code.
+## ¿Qué incluye este repo?
 
-If you prefer to use an integrated development environment (IDE) to build and test your application, you can use the AWS Toolkit.  
-The AWS Toolkit is an open source plug-in for popular IDEs that uses the SAM CLI to build and deploy serverless applications on AWS. The AWS Toolkit also adds a simplified step-through debugging experience for Lambda function code. See the following links to get started.
+- Estructura de ejemplo con 2 APIs: `users-api` y `products-api`.
+- Función de inicialización de base de datos: `database-init/`.
+- Layer compartido en `layers/shared/` con servicios reutilizables.
+- `template.yaml` con recursos: VPC, Aurora Serverless (cluster + instancia), Secrets Manager, Layer y funciones Lambda.
+- `samconfig.toml` con perfiles `dev` y `prod` ya preparados (parámetros comunes como Environment, DBName, DBMasterUsername y AllowedOrigin).
 
-* [CLion](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [GoLand](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [IntelliJ](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [WebStorm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [Rider](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [PhpStorm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [PyCharm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [RubyMine](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [DataGrip](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [VS Code](https://docs.aws.amazon.com/toolkit-for-vscode/latest/userguide/welcome.html)
-* [Visual Studio](https://docs.aws.amazon.com/toolkit-for-visual-studio/latest/user-guide/welcome.html)
+## Mini-contrato (qué hace este boilerplate)
 
-## Deploy the sample application
+- Inputs: código TypeScript en cada función / layer, parámetros en `samconfig.toml` o overrides en deploy.
+- Outputs esperados: stack CloudFormation con API Gateway, Lambdas, Layer, Aurora y secretos.
+- Modo fallos: los despliegues fallarán si no existe configuración AWS válida (credenciales/permisos) o si faltan dependencias en cada paquete.
 
-The Serverless Application Model Command Line Interface (SAM CLI) is an extension of the AWS CLI that adds functionality for building and testing Lambda applications. It uses Docker to run your functions in an Amazon Linux environment that matches Lambda. It can also emulate your application's build environment and API.
+Edge cases a considerar:
+- Si agregas dependencias no incluidas en el Layer, empaqueta o publícalas en cada función.
+- Evita importar código desde rutas relativas a la capa; usa el nombre del paquete exportado desde el layer (ver sección Layers).
 
-To use the SAM CLI, you need the following tools.
+## Requisitos
 
-* SAM CLI - [Install the SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html)
-* Node.js - [Install Node.js 22](https://nodejs.org/en/), including the NPM package management tool.
-* Docker - [Install Docker community edition](https://hub.docker.com/search/?type=edition&offering=community)
+- Node.js 22.x (con npm)
+- AWS CLI configurado (perfil con permisos para crear IAM, RDS, SecretsManager, Lambda, API Gateway, o bien, AdministratorAccess policy funciona)
+- SAM CLI (instrucciones abajo)
+- TypeScript (local o global) y esbuild (se usa via SAM Metadata BuildMethod)
 
-To build and deploy your application for the first time, run the following in your shell:
+### Instalar SAM CLI
+
+Para instrucciones oficiales y opciones (MSI, Homebrew, pipx, apt), revisa: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html
+
+Comandos útiles (ejemplos):
+- macOS (Homebrew):
+
+```bash
+brew tap aws/tap
+brew install aws-sam-cli
+```
+
+- Linux (distribuciones basadas en Debian/Ubuntu) — preferir el instalador oficial o pipx:
+
+```bash
+# revisar la guía oficial; ejemplo con pipx
+python3 -m pip install --user pipx
+python3 -m pipx install aws-sam-cli
+```
+
+- Windows: descarga el instalador MSI desde la documentación oficial o usa Chocolatey:
+
+```powershell
+# si tienes Chocolatey
+choco install -y aws-sam-cli
+```
+
+Nota: sigue la guía oficial si necesitas opciones diferentes o problemas de PATH.
+
+## Preparar el proyecto localmente
+
+1. Clonar el repo:
+
+```bash
+git clone <repo-url>
+cd my-sam-boilerplate
+```
+
+2. Instalar dependencias y compilar capas/funciones antes de build de SAM (recomendado, mas no obligatorio):
+
+- Compilar el layer compartido (ejemplo para este repo):
+
+```bash
+cd layers/shared
+npm install
+npx tsc
+cd ../..
+```
+
+- Compilar una función (ejemplo `users-api`):
+
+```bash
+cd services/users-api
+npm install
+npx tsc
+cd ../..
+```
+
+3. Build con SAM (usa esbuild según `template.yaml` Metadata):
 
 ```bash
 sam build
+```
+
+4. Deploy usando el perfil por defecto o un perfil de entorno del `samconfig.toml`:
+
+```bash
+# Deploy guiado (crea/actualiza samconfig.toml)
 sam deploy --guided
+
+# O usar un perfil de entorno ya definido (ej: dev)
+sam deploy --config-env dev
 ```
 
-The first command will build the source of your application. The second command will package and deploy your application to AWS, with a series of prompts:
+### `samconfig.toml` en este repo
 
-* **Stack Name**: The name of the stack to deploy to CloudFormation. This should be unique to your account and region, and a good starting point would be something matching your project name.
-* **AWS Region**: The AWS region you want to deploy your app to.
-* **Confirm changes before deploy**: If set to yes, any change sets will be shown to you before execution for manual review. If set to no, the AWS SAM CLI will automatically deploy application changes.
-* **Allow SAM CLI IAM role creation**: Many AWS SAM templates, including this example, create AWS IAM roles required for the AWS Lambda function(s) included to access AWS services. By default, these are scoped down to minimum required permissions. To deploy an AWS CloudFormation stack which creates or modifies IAM roles, the `CAPABILITY_IAM` value for `capabilities` must be provided. If permission isn't provided through this prompt, to deploy this example you must explicitly pass `--capabilities CAPABILITY_IAM` to the `sam deploy` command.
-* **Save arguments to samconfig.toml**: If set to yes, your choices will be saved to a configuration file inside the project, so that in the future you can just re-run `sam deploy` without parameters to deploy changes to your application.
+El archivo `samconfig.toml` ya define un perfil `dev` y `prod`. Algunas claves ya seteadas:
 
-You can find your API Gateway Endpoint URL in the output values displayed after deployment.
+- `parameter_overrides` incluye: Environment, DBName, DBMasterUsername, AllowedOrigin.
+- `region`, `s3_prefix`, y `stack_name` están preconfigurados para `dev` y `prod`.
 
-## Use the SAM CLI to build and test locally
+Puedes lanzar `sam deploy --config-env dev` para usar los valores de `dev`, o sobrescribir parámetros con `--parameter-overrides`.
 
-Build your application with the `sam build` command.
+## Ejecutar y probar localmente
+
+- Levantar la API localmente (mapeará las rutas definidas en `template.yaml`):
 
 ```bash
-my-sam-boilerplate$ sam build
+sam local start-api
 ```
 
-The SAM CLI installs dependencies defined in `hello-world/package.json`, compiles TypeScript with esbuild, creates a deployment package, and saves it in the `.aws-sam/build` folder.
-
-Test a single function by invoking it directly with a test event. An event is a JSON document that represents the input that the function receives from the event source. Test events are included in the `events` folder in this project.
-
-Run functions locally and invoke them with the `sam local invoke` command.
+- Invocar una función localmente con un evento de ejemplo:
 
 ```bash
-my-sam-boilerplate$ sam local invoke HelloWorldFunction --event events/event.json
+sam local invoke CreateUserFunction -e events/event.json
 ```
 
-The SAM CLI can also emulate your application's API. Use the `sam local start-api` to run the API locally on port 3000.
+- Hacer peticiones HTTP (por ejemplo con curl) contra el endpoint local (por defecto http://127.0.0.1:3000)
 
 ```bash
-my-sam-boilerplate$ sam local start-api
-my-sam-boilerplate$ curl http://localhost:3000/
+curl -X POST http://127.0.0.1:3000/dev/users -H "Content-Type: application/json" -d '{"name":"Alice"}'
 ```
 
-The SAM CLI reads the application template to determine the API's routes and the functions that they invoke. The `Events` property on each function's definition includes the route and method for each path.
+## Estructura del `template.yaml` (resumen)
+
+- VPC, Subnets y Security Groups: configurados para Aurora.
+- Secrets Manager: `AuroraDBSecret` para credenciales DB.
+- Aurora Cluster & Instance: `AuroraDBCluster` y `AuroraDBInstance` (Serverless v2 settings).
+- Layer: `SharedDependenciesLayer` con `ContentUri: layers/shared/` y `BuildMethod: nodejs22.x`.
+- API Gateway: `ServerlessRestApi` con CORS configurado.
+- Lambdas: bloques por función (por ejemplo `CreateUserFunction`, `GetAllUsersFunction`, `CreateProductFunction`), cada uno con:
+  - `CodeUri` apuntando a `services/<xyz>/`
+  - `Handler` (ej: `app.createUser`)
+  - `Runtime: nodejs22.x`
+  - `Layers` que referencian `SharedDependenciesLayer`
+  - `Metadata.BuildMethod: esbuild` y `BuildProperties` que controlan el empaquetado (EntryPoints, External, Target, Minify...)
+
+Importante: `BuildProperties.External` suele listar `@aws-sdk/*` y `shared` para evitar empaquetar estas dependencias en cada Lambda — se esperan en el layer.
+
+## Cómo agregar una nueva Lambda (paso a paso)
+
+1. Crear directorio de la función: `services/my-new-api/`.
+2. Añadir `package.json`, `tsconfig.json`, `app.ts` y carpeta `src/` con capas: `domain`, `application`, `infrastructure`, `presentation` (seguir ejemplo de `users-api`).
+3. Exportar el handler desde `app.ts` (ej: `export const createSomething = async (event) => { ... }`).
+4. Añadir la función al `template.yaml`. Ejemplo mínimo:
 
 ```yaml
-      Events:
-        HelloWorld:
-          Type: Api
-          Properties:
-            Path: /hello
-            Method: get
+MyNewFunction:
+  Type: AWS::Serverless::Function
+  Properties:
+    Layers:
+      - !Ref SharedDependenciesLayer
+    CodeUri: services/my-new-api/
+    Handler: app.createSomething
+    Runtime: nodejs22.x
+    Environment:
+      Variables:
+        DB_CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+        DB_NAME: !Ref DBName
+    Events:
+      MyNewEvent:
+        Type: Api
+        Properties:
+          Path: /my-new
+          Method: post
+  Metadata:
+    BuildMethod: esbuild
+    BuildProperties:
+      Target: "es2020"
+      EntryPoints:
+        - app.ts
+      External:
+        - "@aws-sdk/*"
+        - "shared"
 ```
 
-## Add a resource to your application
-The application template uses AWS Serverless Application Model (AWS SAM) to define application resources. AWS SAM is an extension of AWS CloudFormation with a simpler syntax for configuring common serverless application resources such as functions, triggers, and APIs. For resources not included in [the SAM specification](https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md), you can use standard [AWS CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html) resource types.
+5. Compilar/Build y Deploy: `sam build && sam deploy --config-env dev` (o `--guided`).
 
-## Fetch, tail, and filter Lambda function logs
+## Cómo añadir/utilizar código o dependencias en el Layer compartido
 
-To simplify troubleshooting, SAM CLI has a command called `sam logs`. `sam logs` lets you fetch logs generated by your deployed Lambda function from the command line. In addition to printing the logs on the terminal, this command has several nifty features to help you quickly find the bug.
+Preferencias de diseño del layer en este repo:
 
-`NOTE`: This command works for all AWS Lambda functions; not just the ones you deploy using SAM.
+- Código fuente en: `layers/shared/src/`.
+- Archivo de entrada: `layers/shared/src/index.ts` que exporte los servicios públicos.
+- `layers/shared/package.json` debe contener el `name` del paquete (por ejemplo `shared`) — ese nombre se usa si las funciones importan por paquete.
 
-```bash
-my-sam-boilerplate$ sam logs -n HelloWorldFunction --stack-name my-sam-boilerplate --tail
+Pasos para añadir util o dependencia:
+
+1. Ir a `layers/shared/` y editar/añadir código en `src/`.
+2. Exportar desde `src/index.ts` los símbolos que quieras usar.
+3. Actualizar `package.json` (version, main si aplica).
+4. Instalar dependencias internas si las hay: `npm install` desde `layers/shared`.
+5. Compilar: `npx tsc` (o la configuración que uses para la build del layer).
+6. Cuando hagas `sam build`, SAM empaquetará `layers/shared/` como `LayerVersion` según `template.yaml`.
+
+Importar desde una Lambda:
+
+- Opción recomendada (cuando `package.json` del layer define `name: "shared"` y el layer se publica con nodejs/node_modules):
+
+```ts
+import { ApiResponseService } from 'shared';
 ```
 
-You can find more information and examples about filtering Lambda function logs in the [SAM CLI Documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html).
+- Alternativa (ruta absoluta a /opt, disponible en tiempo de ejecución):
 
-## Unit tests
-
-Tests are defined in the `hello-world/tests` folder in this project. Use NPM to install the [Jest test framework](https://jestjs.io/) and run unit tests.
-
-```bash
-my-sam-boilerplate$ cd hello-world
-hello-world$ npm install
-hello-world$ npm run test
+```ts
+import { ApiResponseService } from '/opt/nodejs';
 ```
 
-## Cleanup
+Nota: en `template.yaml` se usa `BuildProperties.External: ["shared"]` para que esbuild no incluya `shared` en el bundle de la Lambda — el código vendrá desde el Layer en tiempo de ejecución.
 
-To delete the sample application that you created, use the AWS CLI. Assuming you used your project name for the stack name, you can run the following:
+## Ejemplo mínimo de handler TypeScript que usa el layer
 
-```bash
-sam delete --stack-name my-sam-boilerplate
+```ts
+// services/users-api/app.ts
+import { ApiResponseService } from 'shared';
+
+export const createUser = async (event: any) => {
+  const body = JSON.parse(event.body || '{}');
+  // ... lógica de creación
+  return ApiResponseService.success({ id: 'uuid', ...body });
+};
 ```
 
-## Resources
+## Buenas prácticas y consejos
 
-See the [AWS SAM developer guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html) for an introduction to SAM specification, the SAM CLI, and serverless application concepts.
+- Mantén el layer lo más pequeño y estable posible (cambios frecuentes en layer implican redeploy de layer y actualización de funciones si dependen de su API).
+- Usa `BuildProperties.External` para no empaquetar dependencias que vivirán en el layer.
+- Evita poner credenciales en el código; usa `Secrets Manager` y variables de entorno (ya configuradas en `template.yaml`).
+- Para cambios rápidos de desarrollo local, usa `sam local start-api` y `sam local invoke`.
 
-Next, you can use AWS Serverless Application Repository to deploy ready to use Apps that go beyond hello world samples and learn how authors developed their applications: [AWS Serverless Application Repository main page](https://aws.amazon.com/serverless/serverlessrepo/)
+## Comprobaciones rápidas (quality gates)
+
+- Build: N/A (solo documentación editada)
+- Lint/Typecheck: ejecuta `npm run build` o `npx tsc` dentro de cada paquete si quieres validar.
+
+## Próximos pasos sugeridos
+
+- Añadir scripts NPM que compilen todas las funciones y el layer en un solo paso.
+- Incluir tests unitarios mínimos y un pipeline CI que haga `sam build` y `sam validate`.
+
+## Contribuir
+
+Si vas a usar este boilerplate en tu equipo, adapta `samconfig.toml` a los nombres de stacks y buckets que uséis. Siéntete libre de abrir PRs con mejoras y documentación adicional.
+
+---
+
+License: MIT
