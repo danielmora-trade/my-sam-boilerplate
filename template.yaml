@@ -298,7 +298,7 @@ Resources:
     Properties:
       Layers: 
         - !Ref SharedDependenciesLayer
-      CodeUri: users-api/
+      CodeUri: services/users-api/
       Handler: app.createUser
       Runtime: nodejs22.x
       Architectures:
@@ -344,7 +344,7 @@ Resources:
     Properties:
       Layers: 
         - !Ref SharedDependenciesLayer
-      CodeUri: users-api/
+      CodeUri: services/users-api/
       Handler: app.getAllUsers
       Runtime: nodejs22.x
       Architectures:
@@ -390,7 +390,7 @@ Resources:
     Properties:
       Layers: 
         - !Ref SharedDependenciesLayer
-      CodeUri: users-api/
+      CodeUri: services/users-api/
       Handler: app.deleteUser
       Runtime: nodejs22.x
       Architectures:
@@ -437,7 +437,7 @@ Resources:
     Properties:
       Layers: 
         - !Ref SharedDependenciesLayer
-      CodeUri: products-api/
+      CodeUri: services/products-api/
       Handler: app.createProduct
       Runtime: nodejs22.x
       Architectures:
@@ -483,7 +483,7 @@ Resources:
     Properties:
       Layers: 
         - !Ref SharedDependenciesLayer
-      CodeUri: products-api/
+      CodeUri: services/products-api/
       Handler: app.getAllProducts
       Runtime: nodejs22.x
       Architectures:
@@ -529,7 +529,7 @@ Resources:
     Properties:
       Layers: 
         - !Ref SharedDependenciesLayer
-      CodeUri: products-api/
+      CodeUri: services/products-api/
       Handler: app.deleteProduct
       Runtime: nodejs22.x
       Architectures:

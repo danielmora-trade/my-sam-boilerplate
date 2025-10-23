@@ -10,11 +10,10 @@ export class ProductRepository implements IProductRepository {
 
   async create(product: Omit<Product, 'id' | 'createdAt'>): Promise<Product> {
     const id = this.idGenerator.generate();
-    const now = new Date().toISOString();
     
     const sql = `
-      INSERT INTO products (id, name, description, price, stock, created_at)
-      VALUES (:id, :name, :description, :price, :stock, :createdAt)
+      INSERT INTO products (id, name, description, price, stock)
+      VALUES (:id, :name, :description, :price, :stock)
       RETURNING id, name, description, price, stock, created_at
     `;
     
@@ -23,8 +22,7 @@ export class ProductRepository implements IProductRepository {
       { name: 'name', value: { stringValue: product.name } },
       { name: 'description', value: { stringValue: product.description } },
       { name: 'price', value: { doubleValue: product.price } },
-      { name: 'stock', value: { longValue: product.stock } },
-      { name: 'createdAt', value: { stringValue: now } }
+      { name: 'stock', value: { longValue: product.stock } }
     ];
 
     const result = await this.databaseService.executeQuery<any>(sql, parameters);

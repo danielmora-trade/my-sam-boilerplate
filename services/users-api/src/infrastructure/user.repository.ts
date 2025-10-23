@@ -10,22 +10,21 @@ export class UserRepository implements IUserRepository {
 
   async create(user: Omit<User, 'id' | 'createdAt'>): Promise<User> {
     const id = this.idGenerator.generate();
-    const now = new Date().toISOString();
     
     const sql = `
-      INSERT INTO users (id, name, email, created_at)
-      VALUES (:id, :name, :email, :createdAt)
+      INSERT INTO users (id, name, email)
+      VALUES (:id, :name, :email)
       RETURNING id, name, email, created_at
     `;
     
     const parameters = [
       { name: 'id', value: { stringValue: id } },
       { name: 'name', value: { stringValue: user.name } },
-      { name: 'email', value: { stringValue: user.email } },
-      { name: 'createdAt', value: { stringValue: now } }
+      { name: 'email', value: { stringValue: user.email } }
     ];
 
     const result = await this.databaseService.executeQuery<any>(sql, parameters);
+    if (!result || result.length === 0) throw new Error("No se pudo crear el usuario.");
     return this.mapToUser(result[0]);
   }
 
