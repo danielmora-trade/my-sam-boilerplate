@@ -1,4 +1,4 @@
-import { AuroraDataService } from './aurora-data.service';
+import { AuroraDataService } from "shared";
 
 export class DatabaseInitializer {
   private databaseService: AuroraDataService;
@@ -9,19 +9,10 @@ export class DatabaseInitializer {
 
   async initializeTables(): Promise<void> {
     try {
-      console.log('Initializing database tables...');
-
-      // Create users table
-      await this.createUsersTable();
-      console.log('✅ Users table created');
-
-      // Create products table
-      await this.createProductsTable();
-      console.log('✅ Products table created');
-
-      console.log('🎉 Database initialization completed successfully!');
+      await Promise.all([this.createUsersTable(), this.createProductsTable()]);
+      console.log("🎉 Database initialization completed successfully!");
     } catch (error) {
-      console.error('❌ Error initializing database:', error);
+      console.error("❌ Error initializing database:", error);
       throw error;
     }
   }
@@ -35,7 +26,7 @@ export class DatabaseInitializer {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `;
-    
+
     await this.databaseService.executeStatement(sql);
   }
 
@@ -50,7 +41,7 @@ export class DatabaseInitializer {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `;
-    
+
     await this.databaseService.executeStatement(sql);
   }
 }

@@ -1,9 +1,10 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DatabaseInitializer, ApiResponseService } from 'shared';
+import { ApiResponseService } from 'shared';
+import { DatabaseInitializer } from './src/database-initializer.service'
 
 const responseService = new ApiResponseService();
 
-export const initializeDatabase = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const initializeDatabase = async (_event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const initializer = new DatabaseInitializer();
     await initializer.initializeTables();
