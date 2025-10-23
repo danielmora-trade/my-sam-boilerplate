@@ -37,7 +37,7 @@ region = "us-east-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 image_repositories = []
-parameter_overrides = "Environment=Development"
+parameter_overrides = "Environment=dev DBName=MyDatabaseDev DBMasterUsername=admin_dev AllowedOrigin='*'"
 
 [prod.deploy.parameters]
 stack_name = "my-api-prod"
@@ -47,7 +47,8 @@ region = "us-east-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 image_repositories = []
-parameter_overrides = "Environment=Production"
+parameter_overrides = "Environment=prod DBName=MyDatabaseProd DBMasterUsername=admin_prod AllowedOrigin='http://localhost:3000'"
+
 
 [dev.global.parameters]
 region = "us-east-1"

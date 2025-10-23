@@ -42,6 +42,18 @@ Parameters:
     Type: String
     Default: 10.0.11.0/24
     Description: CIDR block for private subnet 2
+  AllowedOrigin:
+    Type: String
+    Description: El dominio del frontend web permitido para CORS (ej. https://mi-app.com)
+    Default: 'http://localhost:3000'
+  Environment:
+    Type: String
+    Description: El nombre del stage para el API Gateway (ej. dev, qa, prod)
+    Default: dev
+    AllowedValues:
+      - dev
+      - qa
+      - prod
 
 Resources:
   # ========================================
@@ -240,6 +252,17 @@ Resources:
           - nodejs22.x
       Metadata:
         BuildMethod: nodejs22.x
+  # ========================================
+  # API GATEWAY
+  # ========================================
+  ServerlessRestApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'POST, GET, DELETE, OPTIONS'"
+        AllowHeaders: "'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token'"
+        AllowOrigin: !Ref AllowedOrigin
 
   # ========================================
   # LAMBDA FUNCTIONS
@@ -278,6 +301,7 @@ Resources:
         DatabaseInit:
           Type: Api
           Properties:
+            RestApiId: !Ref ServerlessRestApi
             Path: /init-db
             Method: post
     Metadata:
@@ -325,6 +349,7 @@ Resources:
         CreateUser:
           Type: Api
           Properties:
+            RestApiId: !Ref ServerlessRestApi
             Path: /users
             Method: post
     Metadata:
@@ -371,6 +396,7 @@ Resources:
         GetAllUsers:
           Type: Api
           Properties:
+            RestApiId: !Ref ServerlessRestApi
             Path: /users
             Method: get
     Metadata:
@@ -417,6 +443,7 @@ Resources:
         DeleteUser:
           Type: Api
           Properties:
+            RestApiId: !Ref ServerlessRestApi
             Path: /users/{id}
             Method: delete
     Metadata:
@@ -464,6 +491,7 @@ Resources:
         CreateProduct:
           Type: Api
           Properties:
+            RestApiId: !Ref ServerlessRestApi
             Path: /products
             Method: post
     Metadata:
@@ -510,6 +538,7 @@ Resources:
         GetAllProducts:
           Type: Api
           Properties:
+            RestApiId: !Ref ServerlessRestApi
             Path: /products
             Method: get
     Metadata:
@@ -556,6 +585,7 @@ Resources:
         DeleteProduct:
           Type: Api
           Properties:
+            RestApiId: !Ref ServerlessRestApi
             Path: /products/{id}
             Method: delete
     Metadata:
@@ -574,17 +604,17 @@ Outputs:
   # API Outputs
   ApiGatewayUrl:
     Description: "API Gateway endpoint URL for Prod stage"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${Environment}/"
   
   # Users API Endpoints
   UsersApiEndpoints:
     Description: "Users API Endpoints"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/users"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${Environment}/users"
   
   # Products API Endpoints  
   ProductsApiEndpoints:
     Description: "Products API Endpoints"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/products"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${Environment}/products"
   
   # VPC Outputs
   VPCId:
